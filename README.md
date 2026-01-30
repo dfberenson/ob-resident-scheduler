@@ -2,9 +2,10 @@
 
 Monorepo for the OB anesthesia rotation scheduling app.
 
-## Quickstart (Docker Compose)
+## Quickstart (Codespaces + Docker Compose)
 
 ```bash
+cd /workspace/ob-resident-scheduler
 docker compose up --build
 ```
 
