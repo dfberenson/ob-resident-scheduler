@@ -7,6 +7,7 @@ from celery.result import AsyncResult
 from sqlalchemy.orm import Session
 
 from . import crud, models, schemas
+from .database import Base, SessionLocal, get_db, get_engine
 from .database import Base, get_db, get_engine
 from .solver_client import build_schedule_input, run_solver
 from .celery_app import celery_app
@@ -29,6 +30,12 @@ def startup():
         return
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
+    if os.getenv("AUTO_SEED") == "1":
+        db = SessionLocal()
+        try:
+            seed_demo_data_for_startup(db)
+        finally:
+            db.close()
 
 
 @app.get("/health")
@@ -567,6 +574,7 @@ def validate_schedule(period_id: int, db: Session = Depends(get_db)):
     )
 
 
+def seed_demo_data_for_startup(db: Session) -> dict:
 @app.post("/seed")
 def seed_demo_data(db: Session = Depends(get_db)):
     existing = db.query(models.Resident).count()
@@ -615,3 +623,8 @@ def seed_demo_data(db: Session = Depends(get_db)):
     db.commit()
 
     return {"status": "ok", "period_id": period.id}
+
+
+@app.post("/seed")
+def seed_demo_data(db: Session = Depends(get_db)):
+    return seed_demo_data_for_startup(db)

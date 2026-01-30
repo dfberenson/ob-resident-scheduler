@@ -9,6 +9,8 @@ cd /workspace/ob-resident-scheduler
 docker compose up --build
 ```
 
+- Demo data is auto-seeded on startup when using Docker Compose.
+
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 - OpenAPI docs: http://localhost:8000/docs
@@ -107,4 +109,10 @@ curl -X POST http://localhost:8000/schedule-versions/1/publish
 
 ```bash
 curl http://localhost:8000/assignments/1/history
+```
+
+## One-command smoke test
+
+```bash
+bash scripts/smoke_test.sh
 ```
