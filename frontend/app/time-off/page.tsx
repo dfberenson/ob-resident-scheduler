@@ -10,7 +10,7 @@ interface TimeOffBlock {
   block_type: string;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 export default function TimeOffPage() {
   const [blocks, setBlocks] = useState<TimeOffBlock[]>([]);

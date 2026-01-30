@@ -43,7 +43,7 @@ interface AssignmentHistory {
   new_shift_type: string;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 export default function AdminDashboard() {
   const [requests, setRequests] = useState<ResidentRequest[]>([]);

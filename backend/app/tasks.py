@@ -1,3 +1,5 @@
+from datetime import date, datetime
+
 from .celery_app import celery_app
 from .database import SessionLocal
 from . import models
@@ -56,8 +58,8 @@ def generate_schedule_for_period(period_id: int) -> dict:
 
         version.assignments.extend(assignments)
         version.alerts.extend(alerts)
-        version.fairness_report = result.fairness
-        version.unmet_requests = result.unmet_requests
+        version.fairness_report = _json_safe(result.fairness)
+        version.unmet_requests = _json_safe(result.unmet_requests)
         db.add(version)
         db.commit()
 
@@ -69,3 +71,13 @@ def generate_schedule_for_period(period_id: int) -> dict:
         }
     finally:
         db.close()
+
+
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {key: _json_safe(val) for key, val in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    return value

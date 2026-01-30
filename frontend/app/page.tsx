@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 export default function HomePage() {
   const [healthStatus, setHealthStatus] = useState("unknown");
@@ -34,23 +34,6 @@ export default function HomePage() {
     { href: "/residents", label: "Residents" },
     { href: "/holidays", label: "Holidays" },
   ];
-async function fetchHealth() {
-  const baseUrl = process.env.API_BASE_URL ?? "http://localhost:8000";
-  const response = await fetch(`${baseUrl}/health`, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Health check failed: ${response.status}`);
-  }
-  return response.json() as Promise<{ status: string }>;
-}
-
-export default async function HomePage() {
-  let healthStatus = "unknown";
-  try {
-    const health = await fetchHealth();
-    healthStatus = health.status;
-  } catch {
-    healthStatus = "unreachable";
-  }
 
   return (
     <main style={{ padding: "2rem" }}>
@@ -70,6 +53,7 @@ export default async function HomePage() {
             ))}
           </ul>
         </nav>
+      </section>
       <section>
         <h2>Next steps</h2>
         <ul>

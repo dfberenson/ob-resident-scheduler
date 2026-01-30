@@ -26,7 +26,7 @@ interface ValidationResult {
   unmet_requests: Array<{ resident_id: number; request_type: string; met: boolean }>;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 export default function PeriodDetailPage({ params }: PeriodDetailPageProps) {
   const [period, setPeriod] = useState<SchedulePeriod | null>(null);

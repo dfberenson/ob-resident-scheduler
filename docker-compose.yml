@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:15
@@ -55,7 +53,7 @@ services:
       - backend
     environment:
       API_BASE_URL: http://backend:8000
-      NEXT_PUBLIC_API_BASE_URL: http://backend:8000
+      NEXT_PUBLIC_API_BASE_URL: /api
     ports:
       - "3000:3000"
 

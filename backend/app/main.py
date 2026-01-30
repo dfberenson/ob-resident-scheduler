@@ -575,8 +575,6 @@ def validate_schedule(period_id: int, db: Session = Depends(get_db)):
 
 
 def seed_demo_data_for_startup(db: Session) -> dict:
-@app.post("/seed")
-def seed_demo_data(db: Session = Depends(get_db)):
     existing = db.query(models.Resident).count()
     if existing > 0:
         return {"status": "skipped", "reason": "demo data already present"}
