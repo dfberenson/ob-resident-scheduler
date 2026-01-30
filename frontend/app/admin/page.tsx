@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 interface ResidentRequest {
@@ -148,6 +149,9 @@ export default function AdminDashboard() {
 
   return (
     <main style={{ padding: "2rem" }}>
+      <p>
+        <Link href="/">← Back to home</Link>
+      </p>
       <h1>Scheduling Admin Dashboard</h1>
 
       <section>

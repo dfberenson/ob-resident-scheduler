@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 interface ResidentRequest {
@@ -63,6 +64,9 @@ export default function RequestsPage() {
 
   return (
     <main style={{ padding: "2rem" }}>
+      <p>
+        <Link href="/">← Back to home</Link>
+      </p>
       <h1>Resident Requests</h1>
       {status ? <p>{status}</p> : null}
       <section style={{ marginBottom: "2rem", maxWidth: "720px" }}>

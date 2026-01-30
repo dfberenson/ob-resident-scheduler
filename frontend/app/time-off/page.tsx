@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 interface TimeOffBlock {
@@ -10,10 +11,16 @@ interface TimeOffBlock {
   block_type: string;
 }
 
+interface Resident {
+  id: number;
+  name: string;
+}
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 export default function TimeOffPage() {
   const [blocks, setBlocks] = useState<TimeOffBlock[]>([]);
+  const [residents, setResidents] = useState<Resident[]>([]);
   const [residentId, setResidentId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -27,8 +34,16 @@ export default function TimeOffPage() {
     }
   };
 
+  const loadResidents = async () => {
+    const response = await fetch(`${API_BASE_URL}/residents`);
+    if (response.ok) {
+      setResidents(await response.json());
+    }
+  };
+
   useEffect(() => {
     loadBlocks();
+    loadResidents();
   }, []);
 
   const submitBlock = async (event: React.FormEvent) => {
@@ -66,18 +81,25 @@ export default function TimeOffPage() {
     await loadBlocks();
   };
 
+  const residentLookup = new Map(residents.map((resident) => [resident.id, resident.name]));
+
   return (
     <main style={{ padding: "2rem" }}>
+      <p>
+        <Link href="/">← Back to home</Link>
+      </p>
       <h1>Time Off Blocks</h1>
       <form onSubmit={submitBlock} style={{ display: "grid", gap: "0.5rem", maxWidth: "400px" }}>
         <label>
-          Resident ID
-          <input
-            type="number"
-            value={residentId}
-            onChange={(event) => setResidentId(event.target.value)}
-            required
-          />
+          Resident
+          <select value={residentId} onChange={(event) => setResidentId(event.target.value)} required>
+            <option value="">Select resident</option>
+            {residents.map((resident) => (
+              <option key={resident.id} value={resident.id}>
+                {resident.name}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           Start Date
@@ -105,7 +127,7 @@ export default function TimeOffPage() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th style={{ textAlign: "left" }}>Resident ID</th>
+                <th style={{ textAlign: "left" }}>Resident</th>
                 <th style={{ textAlign: "left" }}>Start</th>
                 <th style={{ textAlign: "left" }}>End</th>
                 <th style={{ textAlign: "left" }}>Type</th>
@@ -115,7 +137,7 @@ export default function TimeOffPage() {
             <tbody>
               {blocks.map((block) => (
                 <tr key={block.id}>
-                  <td>{block.resident_id}</td>
+                  <td>{residentLookup.get(block.resident_id) ?? block.resident_id}</td>
                   <td>{block.start_date}</td>
                   <td>{block.end_date}</td>
                   <td>{block.block_type}</td>

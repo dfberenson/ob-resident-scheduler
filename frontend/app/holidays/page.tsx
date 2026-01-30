@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 interface Holiday {
@@ -47,6 +48,9 @@ export default function HolidaysPage() {
 
   return (
     <main style={{ padding: "2rem" }}>
+      <p>
+        <Link href="/">← Back to home</Link>
+      </p>
       <h1>Holidays</h1>
       <form onSubmit={submitHoliday} style={{ display: "grid", gap: "0.5rem", maxWidth: "400px" }}>
         <label>

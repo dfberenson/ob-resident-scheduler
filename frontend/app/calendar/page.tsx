@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 interface Assignment {
@@ -51,6 +52,8 @@ export default function CalendarPage() {
   const [editResidentId, setEditResidentId] = useState<string>("");
   const [editDate, setEditDate] = useState<string>("");
   const [editShiftType, setEditShiftType] = useState<string>("");
+  const [viewMode, setViewMode] = useState<"date" | "resident" | "shift">("date");
+  const [sortMode, setSortMode] = useState<"resident" | "shift">("resident");
 
   useEffect(() => {
     const load = async () => {
@@ -243,6 +246,7 @@ export default function CalendarPage() {
   };
 
   const residentLookup = new Map(residents.map((resident) => [resident.id, resident.name]));
+  const getResidentName = (residentId: number) => residentLookup.get(residentId) ?? `${residentId}`;
   const assignmentsByDate = assignments.reduce<Record<string, Assignment[]>>((acc, assignment) => {
     if (!acc[assignment.date]) {
       acc[assignment.date] = [];
@@ -258,9 +262,55 @@ export default function CalendarPage() {
     acc[alert.date].push(alert);
     return acc;
   }, {});
+  const sortAssignments = (items: Assignment[]) => {
+    const sorted = [...items];
+    if (sortMode === "resident") {
+      sorted.sort((a, b) => getResidentName(a.resident_id).localeCompare(getResidentName(b.resident_id)));
+      return sorted;
+    }
+    sorted.sort((a, b) => {
+      const shiftCompare = a.shift_type.localeCompare(b.shift_type);
+      if (shiftCompare !== 0) {
+        return shiftCompare;
+      }
+      return getResidentName(a.resident_id).localeCompare(getResidentName(b.resident_id));
+    });
+    return sorted;
+  };
+  const assignmentsByResident = assignments.reduce<Record<string, Assignment[]>>((acc, assignment) => {
+    const key = getResidentName(assignment.resident_id);
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    acc[key].push(assignment);
+    return acc;
+  }, {});
+  const residentNames = Object.keys(assignmentsByResident).sort();
+  const assignmentsByShift = assignments.reduce<Record<string, Assignment[]>>((acc, assignment) => {
+    const key = assignment.shift_type;
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    acc[key].push(assignment);
+    return acc;
+  }, {});
+  const shiftTypes = Object.keys(assignmentsByShift).sort();
+  const summarizeDay = (items: Assignment[]) => {
+    const counts: Record<string, number> = {};
+    for (const assignment of items) {
+      counts[assignment.shift_type] = (counts[assignment.shift_type] ?? 0) + 1;
+    }
+    return Object.entries(counts)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([shift, count]) => `${shift}: ${count}`)
+      .join(" • ");
+  };
 
   return (
     <main style={{ padding: "2rem" }}>
+      <p>
+        <Link href="/">← Back to home</Link>
+      </p>
       <h1>Schedule Calendar</h1>
       <section style={{ display: "grid", gap: "0.75rem", maxWidth: "640px" }}>
         <label>
@@ -289,6 +339,28 @@ export default function CalendarPage() {
             ))}
           </select>
         </label>
+        <label>
+          View mode
+          <select
+            value={viewMode}
+            onChange={(event) => setViewMode(event.target.value as "date" | "resident" | "shift")}
+          >
+            <option value="date">Calendar by date</option>
+            <option value="resident">Resident schedule</option>
+            <option value="shift">Shift roster</option>
+          </select>
+        </label>
+        <label>
+          Sort assignments by
+          <select
+            value={sortMode}
+            onChange={(event) => setSortMode(event.target.value as "resident" | "shift")}
+            disabled={viewMode !== "date"}
+          >
+            <option value="resident">Resident name (A→Z)</option>
+            <option value="shift">Shift (A→Z)</option>
+          </select>
+        </label>
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           <button type="button" onClick={generateAsync} disabled={!selectedPeriodId}>
             Generate Draft (Async)
@@ -304,13 +376,16 @@ export default function CalendarPage() {
           </div>
         ) : null}
       </section>
-      {!dates.length ? (
+      {!assignments.length ? (
         <p>No assignments available.</p>
-      ) : (
+      ) : null}
+      {viewMode === "date" && assignments.length ? (
         <section style={{ display: "grid", gap: "1rem" }}>
           {dates.map((date) => {
+            const dayAssignments = assignmentsByDate[date] ?? [];
             const dayAlerts = alertsByDate[date] ?? [];
             const hasAlerts = dayAlerts.length > 0;
+            const summary = summarizeDay(dayAssignments);
             return (
               <article
                 key={date}
@@ -329,6 +404,7 @@ export default function CalendarPage() {
                     </span>
                   ) : null}
                 </header>
+                {summary ? <p style={{ marginTop: "0.5rem" }}>{summary}</p> : null}
                 {hasAlerts ? (
                   <ul style={{ marginTop: "0.5rem", color: "#b42318" }}>
                     {dayAlerts.map((alert, index) => (
@@ -348,9 +424,9 @@ export default function CalendarPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {assignmentsByDate[date].map((assignment) => (
+                      {sortAssignments(dayAssignments).map((assignment) => (
                         <tr key={assignment.id}>
-                          <td>{residentLookup.get(assignment.resident_id) ?? assignment.resident_id}</td>
+                          <td>{getResidentName(assignment.resident_id)}</td>
                           <td>{assignment.shift_type}</td>
                           <td>
                             <button type="button" onClick={() => startEditing(assignment)}>
@@ -366,7 +442,103 @@ export default function CalendarPage() {
             );
           })}
         </section>
-      )}
+      ) : null}
+      {viewMode === "resident" && assignments.length ? (
+        <section style={{ display: "grid", gap: "1rem" }}>
+          {residentNames.map((residentName) => {
+            const items = [...assignmentsByResident[residentName]].sort((a, b) =>
+              a.date.localeCompare(b.date)
+            );
+            return (
+              <article
+                key={residentName}
+                style={{
+                  border: "1px solid #ddd",
+                  borderRadius: "8px",
+                  padding: "1rem",
+                  background: "white",
+                }}
+              >
+                <header>
+                  <h2 style={{ margin: 0 }}>{residentName}</h2>
+                </header>
+                <div style={{ marginTop: "0.75rem" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: "left" }}>Date</th>
+                        <th style={{ textAlign: "left" }}>Shift</th>
+                        <th style={{ textAlign: "left" }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((assignment) => (
+                        <tr key={assignment.id}>
+                          <td>{assignment.date}</td>
+                          <td>{assignment.shift_type}</td>
+                          <td>
+                            <button type="button" onClick={() => startEditing(assignment)}>
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      ) : null}
+      {viewMode === "shift" && assignments.length ? (
+        <section style={{ display: "grid", gap: "1rem" }}>
+          {shiftTypes.map((shiftType) => {
+            const items = [...assignmentsByShift[shiftType]].sort((a, b) =>
+              a.date.localeCompare(b.date)
+            );
+            return (
+              <article
+                key={shiftType}
+                style={{
+                  border: "1px solid #ddd",
+                  borderRadius: "8px",
+                  padding: "1rem",
+                  background: "white",
+                }}
+              >
+                <header>
+                  <h2 style={{ margin: 0 }}>{shiftType}</h2>
+                </header>
+                <div style={{ marginTop: "0.75rem" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: "left" }}>Date</th>
+                        <th style={{ textAlign: "left" }}>Resident</th>
+                        <th style={{ textAlign: "left" }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((assignment) => (
+                        <tr key={assignment.id}>
+                          <td>{assignment.date}</td>
+                          <td>{getResidentName(assignment.resident_id)}</td>
+                          <td>
+                            <button type="button" onClick={() => startEditing(assignment)}>
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      ) : null}
       <section style={{ marginTop: "2rem" }}>
         <h2>Edit Assignment</h2>
         {editingAssignmentId ? (

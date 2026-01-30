@@ -149,9 +149,18 @@ def generate_schedule(payload: ScheduleInput) -> GenerationOutput:
                 + assign[(resident.id, day, ShiftType.OB_L4)]
                 + assign[(resident.id, day, ShiftType.OB_POSTCALL)]
                 + assign[(resident.id, day, ShiftType.OB_OC)]
+                + assign[(resident.id, day, ShiftType.OB_L3)]
                 <= 1
             )
-            model.Add(assign[(resident.id, day, ShiftType.OB_L3)] <= assign[(resident.id, day, ShiftType.OB_OC)])
+            next_day = day + timedelta(days=1)
+            if next_day in days:
+                # OB_L3 is the day before an OB_OC shift for the same resident.
+                model.Add(
+                    assign[(resident.id, day, ShiftType.OB_L3)]
+                    <= assign[(resident.id, next_day, ShiftType.OB_OC)]
+                )
+            else:
+                model.Add(assign[(resident.id, day, ShiftType.OB_L3)] == 0)
 
             time_off_type = _is_time_off(day, resident.id, payload.time_off)
             if time_off_type:

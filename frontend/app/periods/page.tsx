@@ -55,6 +55,9 @@ export default function PeriodsPage() {
 
   return (
     <main style={{ padding: "2rem" }}>
+      <p>
+        <Link href="/">← Back to home</Link>
+      </p>
       <h1>Schedule Periods</h1>
       <form onSubmit={createPeriod} style={{ display: "grid", gap: "0.5rem", maxWidth: "420px" }}>
         <label>

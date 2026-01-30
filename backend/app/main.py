@@ -404,17 +404,24 @@ def validate_version(version_id: int, db: Session = Depends(get_db)):
                     )
                     break
 
-        has_l3 = any(assignment.shift_type == models.ShiftType.OB_L3 for assignment in resident_assignments)
-        has_oc = any(assignment.shift_type == models.ShiftType.OB_OC for assignment in resident_assignments)
-        if has_l3 and not has_oc:
-            violations.append(
-                {
-                    "resident_id": resident_id,
-                    "date": day,
-                    "assignment_ids": [assignment.id for assignment in resident_assignments],
-                    "message": "OB_L3 assignment requires OB_OC on same day.",
-                }
+        has_l3 = any(
+            assignment.shift_type == models.ShiftType.OB_L3 for assignment in resident_assignments
+        )
+        if has_l3:
+            next_day = day + timedelta(days=1)
+            next_assignments = assignments_by_key.get((resident_id, next_day), [])
+            has_next_oc = any(
+                assignment.shift_type == models.ShiftType.OB_OC for assignment in next_assignments
             )
+            if not has_next_oc:
+                violations.append(
+                    {
+                        "resident_id": resident_id,
+                        "date": day,
+                        "assignment_ids": [assignment.id for assignment in resident_assignments],
+                        "message": "OB_L3 assignment requires OB_OC on the next day.",
+                    }
+                )
 
     for day, day_assignments in assignments_by_day.items():
         requirements = coverage_requirements(day)
@@ -583,6 +590,11 @@ def seed_demo_data_for_startup(db: Session) -> dict:
         models.Resident(name="Alex Rivera", tier=1, ob_months_completed=1),
         models.Resident(name="Jordan Lee", tier=2, ob_months_completed=2),
         models.Resident(name="Morgan Patel", tier=0, ob_months_completed=0),
+        models.Resident(name="Casey Nguyen", tier=1, ob_months_completed=1),
+        models.Resident(name="Riley Chen", tier=2, ob_months_completed=2),
+        models.Resident(name="Jamie Ortiz", tier=1, ob_months_completed=3),
+        models.Resident(name="Taylor Brooks", tier=3, ob_months_completed=4),
+        models.Resident(name="Avery Singh", tier=2, ob_months_completed=1),
     ]
     db.add_all(residents)
     db.flush()

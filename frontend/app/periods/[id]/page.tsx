@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 interface PeriodDetailPageProps {
@@ -96,6 +97,9 @@ export default function PeriodDetailPage({ params }: PeriodDetailPageProps) {
 
   return (
     <main style={{ padding: "2rem" }}>
+      <p>
+        <Link href="/">← Back to home</Link>
+      </p>
       <h1>Schedule Period {params.id}</h1>
       {period ? (
         <p>
