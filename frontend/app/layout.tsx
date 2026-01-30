@@ -1,0 +1,102 @@
+import type { ReactNode } from "react";
+
+export const metadata = {
+  title: "OB Resident Scheduler",
+  description: "OB anesthesia rotation scheduling app",
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <style>{`
+          :root {
+            color-scheme: light;
+          }
+          * {
+            box-sizing: border-box;
+          }
+          body {
+            font-family: "Inter", "Segoe UI", Arial, sans-serif;
+            margin: 0;
+            background: #f8fafc;
+            color: #0f172a;
+          }
+          main {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 3rem;
+          }
+          h1 {
+            margin-top: 0;
+          }
+          a {
+            color: #2563eb;
+            text-decoration: none;
+          }
+          a:hover {
+            text-decoration: underline;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+          }
+          th,
+          td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: left;
+            vertical-align: top;
+          }
+          th {
+            background: #f1f5f9;
+            font-weight: 600;
+          }
+          tr:last-child td {
+            border-bottom: none;
+          }
+          section {
+            margin-top: 1.5rem;
+          }
+          button {
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 0.5rem 0.9rem;
+            cursor: pointer;
+            font-weight: 600;
+          }
+          button:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+          }
+          input,
+          select,
+          textarea {
+            width: 100%;
+            margin-top: 0.25rem;
+            padding: 0.5rem 0.6rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 0.95rem;
+          }
+          label {
+            font-weight: 600;
+          }
+          form {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1rem;
+          }
+        `}</style>
+        {children}
+      </body>
+    </html>
+  );
+}
