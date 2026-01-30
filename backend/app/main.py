@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from . import crud, models, schemas
 from .database import Base, SessionLocal, get_db, get_engine
+from .database import Base, get_db, get_engine
 from .solver_client import build_schedule_input, run_solver
 from .celery_app import celery_app
 from .tasks import generate_schedule_for_period
@@ -574,6 +575,8 @@ def validate_schedule(period_id: int, db: Session = Depends(get_db)):
 
 
 def seed_demo_data_for_startup(db: Session) -> dict:
+@app.post("/seed")
+def seed_demo_data(db: Session = Depends(get_db)):
     existing = db.query(models.Resident).count()
     if existing > 0:
         return {"status": "skipped", "reason": "demo data already present"}

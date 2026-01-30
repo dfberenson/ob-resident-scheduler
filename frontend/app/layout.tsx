@@ -97,6 +97,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         `}</style>
         {children}
       </body>
+      <body style={{ fontFamily: "Arial, sans-serif", margin: 0 }}>{children}</body>
     </html>
   );
 }
