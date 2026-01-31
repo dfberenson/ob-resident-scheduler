@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import WorkflowNav from "../components/WorkflowNav";
 
 interface Assignment {
   id: number;
@@ -308,6 +309,7 @@ export default function CalendarPage() {
 
   return (
     <main style={{ padding: "2rem" }}>
+      <WorkflowNav />
       <p>
         <Link href="/">← Back to home</Link>
       </p>
@@ -592,6 +594,7 @@ export default function CalendarPage() {
         )}
         {status ? <p>{status}</p> : null}
       </section>
+      <WorkflowNav />
     </main>
   );
 }

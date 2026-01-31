@@ -26,6 +26,11 @@ class SchedulePeriodCreate(BaseModel):
     end_date: date
 
 
+class SchedulePeriodMonthCreate(BaseModel):
+    year: int
+    month: int
+
+
 class SchedulePeriodRead(SchedulePeriodCreate):
     id: int
     created_at: datetime
@@ -133,6 +138,7 @@ class TimeOffUpdate(BaseModel):
 class HolidayCreate(BaseModel):
     date: date
     name: str
+    hospital_holiday: Optional[bool] = None
 
 
 class HolidayRead(HolidayCreate):
@@ -140,6 +146,23 @@ class HolidayRead(HolidayCreate):
 
     class Config:
         orm_mode = True
+
+
+class HolidayUpdate(BaseModel):
+    hospital_holiday: Optional[bool] = None
+
+
+class SolverConstraintsRead(BaseModel):
+    id: int
+    config: dict
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class SolverConstraintsUpdate(BaseModel):
+    config: dict
 
 
 class AssignmentHistoryRead(BaseModel):

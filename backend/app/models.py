@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from enum import Enum
 
-from sqlalchemy import Date, DateTime, Enum as SAEnum, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, Integer, String
 from sqlalchemy import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -109,6 +109,15 @@ class Holiday(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     date: Mapped[date] = mapped_column(Date, nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
+    hospital_holiday: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
+
+class SolverConstraints(Base):
+    __tablename__ = "solver_constraints"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    config: Mapped[dict] = mapped_column(JSON, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class AssignmentHistory(Base):

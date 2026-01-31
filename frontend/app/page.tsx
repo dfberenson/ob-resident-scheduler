@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { workflowSteps } from "./workflow";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
@@ -25,16 +26,6 @@ export default function HomePage() {
     loadHealth();
   }, []);
 
-  const navLinks = [
-    { href: "/periods", label: "Schedule Periods" },
-    { href: "/calendar", label: "Calendar" },
-    { href: "/admin", label: "Admin Dashboard" },
-    { href: "/requests", label: "Resident Requests" },
-    { href: "/time-off", label: "Time Off" },
-    { href: "/residents", label: "Residents" },
-    { href: "/holidays", label: "Holidays" },
-  ];
-
   return (
     <main style={{ padding: "2rem" }}>
       <h1>OB Resident Scheduler</h1>
@@ -43,24 +34,18 @@ export default function HomePage() {
         API status: <strong>{healthStatus}</strong>
       </p>
       <section style={{ marginTop: "1.5rem" }}>
-        <h2>Navigation</h2>
-        <nav>
-          <ul style={{ listStyle: "none", padding: 0, display: "grid", gap: "0.5rem" }}>
-            {navLinks.map((link) => (
-              <li key={link.href}>
-                <Link href={link.href}>{link.label}</Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </section>
-      <section>
-        <h2>Next steps</h2>
-        <ul>
-          <li>Create schedule periods.</li>
-          <li>Collect resident requests and time off.</li>
-          <li>Generate and validate draft schedules.</li>
-        </ul>
+        <h2>Workflow</h2>
+        <ol style={{ paddingLeft: "1.25rem", display: "grid", gap: "0.5rem" }}>
+          {workflowSteps.map((step) => (
+            <li key={step.href}>
+              <strong>{step.title}</strong>
+              <div style={{ color: "#475569" }}>{step.description}</div>
+            </li>
+          ))}
+        </ol>
+        <div style={{ marginTop: "1rem" }}>
+          <Link href={workflowSteps[0].href}>Start workflow →</Link>
+        </div>
       </section>
     </main>
   );

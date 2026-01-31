@@ -1,12 +1,14 @@
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from celery.result import AsyncResult
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from . import crud, models, schemas
+from .constraints import DEFAULT_CONSTRAINTS, ensure_constraints, get_constraints
 from .database import Base, SessionLocal, get_db, get_engine
 from .database import Base, get_db, get_engine
 from .solver_client import build_schedule_input, run_solver
@@ -30,12 +32,22 @@ def startup():
         return
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
+    with engine.connect() as connection:
+        connection.execute(
+            text("ALTER TABLE holidays ADD COLUMN IF NOT EXISTS hospital_holiday BOOLEAN")
+        )
+        connection.commit()
     if os.getenv("AUTO_SEED") == "1":
         db = SessionLocal()
         try:
             seed_demo_data_for_startup(db)
         finally:
             db.close()
+    db = SessionLocal()
+    try:
+        ensure_constraints(db)
+    finally:
+        db.close()
 
 
 @app.get("/health")
@@ -46,6 +58,14 @@ def health():
 @app.get("/periods", response_model=list[schemas.SchedulePeriodRead])
 def list_periods(db: Session = Depends(get_db)):
     return crud.list_periods(db)
+
+
+@app.get("/periods/{period_id}", response_model=schemas.SchedulePeriodRead)
+def get_period(period_id: int, db: Session = Depends(get_db)):
+    period = crud.get_period(db, period_id)
+    if not period:
+        raise HTTPException(status_code=404, detail="Period not found")
+    return period
 
 
 @app.get("/periods/{period_id}/versions", response_model=list[schemas.ScheduleVersionRead])
@@ -187,14 +207,141 @@ def delete_time_off(block_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/holidays", response_model=list[schemas.HolidayRead])
-def list_holidays(db: Session = Depends(get_db)):
-    return db.query(models.Holiday).order_by(models.Holiday.date).all()
+def list_holidays(
+    start_date: date | None = None,
+    end_date: date | None = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(models.Holiday)
+    if start_date:
+        query = query.filter(models.Holiday.date >= start_date)
+    if end_date:
+        query = query.filter(models.Holiday.date <= end_date)
+    return query.order_by(models.Holiday.date).all()
+
+
+@app.get("/constraints", response_model=schemas.SolverConstraintsRead)
+def read_constraints(db: Session = Depends(get_db)):
+    constraints = ensure_constraints(db)
+    return constraints
+
+
+@app.put("/constraints", response_model=schemas.SolverConstraintsRead)
+def update_constraints(payload: schemas.SolverConstraintsUpdate, db: Session = Depends(get_db)):
+    constraints = ensure_constraints(db)
+    constraints.config = payload.config or DEFAULT_CONSTRAINTS
+    constraints.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(constraints)
+    return constraints
 
 
 @app.post("/holidays", response_model=schemas.HolidayRead, status_code=201)
 def create_holiday(payload: schemas.HolidayCreate, db: Session = Depends(get_db)):
-    holiday = models.Holiday(date=payload.date, name=payload.name)
+    holiday = models.Holiday(
+        date=payload.date,
+        name=payload.name,
+        hospital_holiday=payload.hospital_holiday,
+    )
     db.add(holiday)
+    db.commit()
+    db.refresh(holiday)
+    return holiday
+
+
+def nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
+    current = date(year, month, 1)
+    while current.weekday() != weekday:
+        current += timedelta(days=1)
+    return current + timedelta(days=7 * (n - 1))
+
+
+def last_weekday(year: int, month: int, weekday: int) -> date:
+    current = date(year, month + 1, 1) - timedelta(days=1) if month < 12 else date(year, 12, 31)
+    while current.weekday() != weekday:
+        current -= timedelta(days=1)
+    return current
+
+
+def observed_date(holiday_date: date) -> date:
+    if holiday_date.weekday() == 5:
+        return holiday_date - timedelta(days=1)
+    if holiday_date.weekday() == 6:
+        return holiday_date + timedelta(days=1)
+    return holiday_date
+
+
+def federal_holidays_for_year(year: int) -> list[tuple[date, str]]:
+    holidays: list[tuple[date, str]] = []
+
+    def add_fixed(name: str, month: int, day: int):
+        actual = date(year, month, day)
+        observed = observed_date(actual)
+        label = name if observed == actual else f"{name} (Observed)"
+        holidays.append((observed, label))
+
+    add_fixed("New Year's Day", 1, 1)
+    holidays.append((nth_weekday(year, 1, 0, 3), "Martin Luther King Jr. Day"))
+    holidays.append((nth_weekday(year, 2, 0, 3), "Washington's Birthday"))
+    holidays.append((last_weekday(year, 5, 0), "Memorial Day"))
+    add_fixed("Juneteenth National Independence Day", 6, 19)
+    add_fixed("Independence Day", 7, 4)
+    holidays.append((nth_weekday(year, 9, 0, 1), "Labor Day"))
+    holidays.append((nth_weekday(year, 10, 0, 2), "Columbus Day"))
+    add_fixed("Veterans Day", 11, 11)
+    holidays.append((nth_weekday(year, 11, 3, 4), "Thanksgiving Day"))
+    add_fixed("Christmas Day", 12, 25)
+
+    return holidays
+
+
+def federal_holidays_in_range(start: date, end: date) -> list[tuple[date, str]]:
+    holiday_map: dict[date, str] = {}
+    for year in range(start.year, end.year + 1):
+        for holiday_date, name in federal_holidays_for_year(year):
+            if start <= holiday_date <= end:
+                holiday_map[holiday_date] = name
+    return sorted(holiday_map.items(), key=lambda item: item[0])
+
+
+@app.post("/holidays/seed")
+def seed_federal_holidays(
+    start_date: date,
+    end_date: date,
+    default_confirmed: bool = True,
+    db: Session = Depends(get_db),
+):
+    created = 0
+    updated = 0
+    items = federal_holidays_in_range(start_date, end_date)
+    for holiday_date, name in items:
+        existing = db.query(models.Holiday).filter(models.Holiday.date == holiday_date).first()
+        if existing:
+            if existing.name != name:
+                existing.name = name
+                updated += 1
+            continue
+        db.add(
+            models.Holiday(
+                date=holiday_date,
+                name=name,
+                hospital_holiday=True if default_confirmed else None,
+            )
+        )
+        created += 1
+    db.commit()
+    return {"status": "ok", "created": created, "updated": updated}
+
+
+@app.patch("/holidays/{holiday_id}", response_model=schemas.HolidayRead)
+def update_holiday(
+    holiday_id: int, payload: schemas.HolidayUpdate, db: Session = Depends(get_db)
+):
+    holiday = db.query(models.Holiday).filter(models.Holiday.id == holiday_id).first()
+    if not holiday:
+        raise HTTPException(status_code=404, detail="Holiday not found")
+    if "hospital_holiday" in payload.__fields_set__:
+        holiday.hospital_holiday = payload.hospital_holiday
     db.commit()
     db.refresh(holiday)
     return holiday
@@ -237,7 +384,68 @@ def import_requests(payload: schemas.RequestImportPayload, db: Session = Depends
 
 @app.post("/periods", response_model=schemas.SchedulePeriodRead, status_code=201)
 def create_period(payload: schemas.SchedulePeriodCreate, db: Session = Depends(get_db)):
-    return crud.create_period(db, payload.name, payload.start_date, payload.end_date)
+    start_date = payload.start_date
+    end_date = payload.end_date
+    first_day = date(start_date.year, start_date.month, 1)
+    last_day = (
+        date(start_date.year, start_date.month + 1, 1) - timedelta(days=1)
+        if start_date.month < 12
+        else date(start_date.year, 12, 31)
+    )
+    if start_date != first_day or end_date != last_day or end_date.month != start_date.month:
+        raise HTTPException(
+            status_code=400,
+            detail="Schedule periods must cover exactly one calendar month.",
+        )
+
+    existing = (
+        db.query(models.SchedulePeriod)
+        .filter(
+            func.extract("year", models.SchedulePeriod.start_date) == start_date.year,
+            func.extract("month", models.SchedulePeriod.start_date) == start_date.month,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Schedule period already exists for this month.",
+                "period_id": existing.id,
+            },
+        )
+    return crud.create_period(db, payload.name, start_date, end_date)
+
+
+@app.post("/periods/monthly", response_model=schemas.SchedulePeriodRead, status_code=201)
+def create_monthly_period(payload: schemas.SchedulePeriodMonthCreate, db: Session = Depends(get_db)):
+    if payload.month < 1 or payload.month > 12:
+        raise HTTPException(status_code=400, detail="Invalid month.")
+    first_day = date(payload.year, payload.month, 1)
+    last_day = (
+        date(payload.year, payload.month + 1, 1) - timedelta(days=1)
+        if payload.month < 12
+        else date(payload.year, 12, 31)
+    )
+    name = first_day.strftime("%B %Y")
+
+    existing = (
+        db.query(models.SchedulePeriod)
+        .filter(
+            func.extract("year", models.SchedulePeriod.start_date) == payload.year,
+            func.extract("month", models.SchedulePeriod.start_date) == payload.month,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Schedule period already exists for this month.",
+                "period_id": existing.id,
+            },
+        )
+    return crud.create_period(db, name, first_day, last_day)
 
 
 @app.post("/periods/{period_id}/generate", response_model=schemas.GenerationResult)
@@ -247,13 +455,14 @@ def generate_schedule(period_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Period not found")
 
     version = crud.create_version(db, period)
+    constraints = get_constraints(db)
     residents = db.query(models.Resident).all()
     requests = db.query(models.ResidentRequest).filter(models.ResidentRequest.approved.is_(True)).all()
     time_off = db.query(models.TimeOff).all()
     holidays = db.query(models.Holiday).all()
 
     solver_input = build_schedule_input(
-        period.start_date, period.end_date, residents, requests, time_off, holidays
+        period.start_date, period.end_date, residents, requests, time_off, holidays, constraints
     )
     result = run_solver(solver_input)
 
@@ -349,6 +558,7 @@ def validate_version(version_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Version not found")
 
     period = version.period
+    constraints = get_constraints(db)
     assignments = (
         db.query(models.Assignment, models.Resident)
         .join(models.Resident)
@@ -358,15 +568,30 @@ def validate_version(version_id: int, db: Session = Depends(get_db)):
     if not assignments:
         raise HTTPException(status_code=404, detail="Version not found or no assignments")
 
-    holidays = {holiday.date for holiday in db.query(models.Holiday).all()}
+    holidays = {
+        holiday.date
+        for holiday in db.query(models.Holiday).all()
+        if holiday.hospital_holiday
+    }
+
+    coverage = constraints.get("coverage", {})
 
     def coverage_requirements(day: date):
         is_weekend = day.weekday() >= 5 or day in holidays
         if is_weekend:
-            return {"ob_oc": 2, "ob_l3": 0, "ob_l4": 1, "ob_day_min": 0, "ob_day_max": 0}
+            return coverage.get(
+                "weekend_or_holiday",
+                {"ob_oc": 2, "ob_l3": 0, "ob_l4": 1, "ob_day_min": 0, "ob_day_max": 0},
+            )
         if day.weekday() == 4:
-            return {"ob_oc": 2, "ob_l3": 0, "ob_l4": 1, "ob_day_min": 2, "ob_day_max": 4}
-        return {"ob_oc": 2, "ob_l3": 1, "ob_l4": 0, "ob_day_min": 2, "ob_day_max": 4}
+            return coverage.get(
+                "friday",
+                {"ob_oc": 2, "ob_l3": 0, "ob_l4": 1, "ob_day_min": 2, "ob_day_max": 4},
+            )
+        return coverage.get(
+            "weekday",
+            {"ob_oc": 2, "ob_l3": 1, "ob_l4": 0, "ob_day_min": 2, "ob_day_max": 4},
+        )
 
     violations: list[dict] = []
     alerts: list[dict] = []

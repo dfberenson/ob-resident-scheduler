@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import WorkflowNav from "../components/WorkflowNav";
 
 interface SchedulePeriod {
   id: number;
@@ -14,10 +16,28 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 export default function PeriodsPage() {
   const [periods, setPeriods] = useState<SchedulePeriod[]>([]);
-  const [name, setName] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [monthValue, setMonthValue] = useState("");
   const [status, setStatus] = useState("");
+  const router = useRouter();
+
+  const quickMonths = useMemo(() => {
+    const results: { name: string; start: string; end: string }[] = [];
+    const now = new Date();
+    const formatDate = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
+    for (let offset = 0; offset < 6; offset += 1) {
+      const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0);
+      const label = start.toLocaleString("en-US", { month: "long", year: "numeric" });
+      results.push({ name: label, start: formatDate(start), end: formatDate(end) });
+    }
+    return results;
+  }, []);
 
   const loadPeriods = async () => {
     const response = await fetch(`${API_BASE_URL}/periods`);
@@ -28,56 +48,79 @@ export default function PeriodsPage() {
 
   useEffect(() => {
     loadPeriods();
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    setMonthValue(`${now.getFullYear()}-${month}`);
   }, []);
 
   const createPeriod = async (event: React.FormEvent) => {
     event.preventDefault();
     setStatus("");
-    const response = await fetch(`${API_BASE_URL}/periods`, {
+    if (!monthValue) {
+      setStatus("Please choose a month.");
+      return;
+    }
+    const [year, month] = monthValue.split("-").map(Number);
+    const response = await fetch(`${API_BASE_URL}/periods/monthly`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name,
-        start_date: startDate,
-        end_date: endDate,
+        year,
+        month,
       }),
     });
+    if (response.status === 409) {
+      const payload = await response.json();
+      setStatus(payload.detail?.message ?? "Schedule period already exists.");
+      if (payload.detail?.period_id) {
+        router.push(`/holidays?period_id=${payload.detail.period_id}`);
+      }
+      return;
+    }
     if (!response.ok) {
       setStatus("Failed to create schedule period.");
       return;
     }
+    const created = await response.json();
     setStatus("Schedule period created.");
-    setName("");
-    setStartDate("");
-    setEndDate("");
     await loadPeriods();
+    router.push(`/holidays?period_id=${created.id}`);
   };
 
   return (
     <main style={{ padding: "2rem" }}>
+      <WorkflowNav />
       <p>
         <Link href="/">← Back to home</Link>
       </p>
       <h1>Schedule Periods</h1>
-      <form onSubmit={createPeriod} style={{ display: "grid", gap: "0.5rem", maxWidth: "420px" }}>
+      <section style={{ marginBottom: "1.5rem" }}>
+        <h2>Quick pick (current + next 5 months)</h2>
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+          {quickMonths.map((month) => (
+            <button
+              key={month.start}
+              type="button"
+              onClick={() => {
+                setMonthValue(month.start.slice(0, 7));
+              }}
+            >
+              {month.name}
+            </button>
+          ))}
+        </div>
+      </section>
+      <form onSubmit={createPeriod} style={{ display: "grid", gap: "0.5rem", maxWidth: "360px" }}>
         <label>
-          Name
-          <input type="text" value={name} onChange={(event) => setName(event.target.value)} required />
-        </label>
-        <label>
-          Start Date
+          Month
           <input
-            type="date"
-            value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
+            type="month"
+            value={monthValue}
+            onChange={(event) => setMonthValue(event.target.value)}
             required
           />
         </label>
-        <label>
-          End Date
-          <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} required />
-        </label>
-        <button type="submit">Create Period</button>
+        <button type="submit">Select Month</button>
       </form>
       {status ? <p>{status}</p> : null}
       <section style={{ marginTop: "2rem" }}>
@@ -101,7 +144,7 @@ export default function PeriodsPage() {
                   <td>{period.start_date}</td>
                   <td>{period.end_date}</td>
                   <td>
-                    <Link href={`/periods/${period.id}`}>View</Link>
+                    <Link href={`/holidays?period_id=${period.id}`}>Resume</Link>
                   </td>
                 </tr>
               ))}
@@ -109,6 +152,7 @@ export default function PeriodsPage() {
           </table>
         )}
       </section>
+      <WorkflowNav />
     </main>
   );
 }

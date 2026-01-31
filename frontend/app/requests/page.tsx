@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import WorkflowNav from "../components/WorkflowNav";
 
 interface ResidentRequest {
   id: number;
@@ -13,10 +14,25 @@ interface ResidentRequest {
   approved: boolean;
 }
 
+interface TimeOffBlock {
+  id: number;
+  resident_id: number;
+  start_date: string;
+  end_date: string;
+  block_type: string;
+}
+
+interface Resident {
+  id: number;
+  name: string;
+}
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 export default function RequestsPage() {
   const [requests, setRequests] = useState<ResidentRequest[]>([]);
+  const [timeOffBlocks, setTimeOffBlocks] = useState<TimeOffBlock[]>([]);
+  const [residents, setResidents] = useState<Resident[]>([]);
   const [status, setStatus] = useState("");
   const [importPayload, setImportPayload] = useState(
     JSON.stringify(
@@ -44,8 +60,24 @@ export default function RequestsPage() {
     }
   };
 
+  const loadTimeOff = async () => {
+    const response = await fetch(`${API_BASE_URL}/time-off`);
+    if (response.ok) {
+      setTimeOffBlocks(await response.json());
+    }
+  };
+
+  const loadResidents = async () => {
+    const response = await fetch(`${API_BASE_URL}/residents`);
+    if (response.ok) {
+      setResidents(await response.json());
+    }
+  };
+
   useEffect(() => {
     loadRequests();
+    loadTimeOff();
+    loadResidents();
   }, []);
 
   const toggleApproval = async (request: ResidentRequest) => {
@@ -64,6 +96,7 @@ export default function RequestsPage() {
 
   return (
     <main style={{ padding: "2rem" }}>
+      <WorkflowNav />
       <p>
         <Link href="/">← Back to home</Link>
       </p>
@@ -139,6 +172,44 @@ export default function RequestsPage() {
           </tbody>
         </table>
       )}
+      <section style={{ marginTop: "2rem" }}>
+        <h2>BT Vacation Time</h2>
+        {timeOffBlocks.filter((block) => block.block_type.startsWith("BT_")).length === 0 ? (
+          <p>No BT vacation blocks entered yet.</p>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left" }}>Resident</th>
+                <th style={{ textAlign: "left" }}>Start</th>
+                <th style={{ textAlign: "left" }}>End</th>
+                <th style={{ textAlign: "left" }}>Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {timeOffBlocks
+                .filter((block) => block.block_type.startsWith("BT_"))
+                .map((block) => {
+                const residentName =
+                  residents.find((resident) => resident.id === block.resident_id)?.name ??
+                  block.resident_id;
+                return (
+                  <tr key={block.id}>
+                    <td>{residentName}</td>
+                    <td>{block.start_date}</td>
+                    <td>{block.end_date}</td>
+                    <td>{block.block_type}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+        <p style={{ marginTop: "0.5rem" }}>
+          Manage time off in the <Link href="/time-off">Time Off</Link> page.
+        </p>
+      </section>
+      <WorkflowNav />
     </main>
   );
 }

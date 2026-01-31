@@ -3,6 +3,7 @@ from datetime import date, datetime
 from .celery_app import celery_app
 from .database import SessionLocal
 from . import models
+from .constraints import get_constraints
 from .solver_client import build_schedule_input, run_solver
 
 
@@ -31,9 +32,16 @@ def generate_schedule_for_period(period_id: int) -> dict:
         requests = db.query(models.ResidentRequest).filter(models.ResidentRequest.approved.is_(True)).all()
         time_off = db.query(models.TimeOff).all()
         holidays = db.query(models.Holiday).all()
+        constraints = get_constraints(db)
 
         solver_input = build_schedule_input(
-            period.start_date, period.end_date, residents, requests, time_off, holidays
+            period.start_date,
+            period.end_date,
+            residents,
+            requests,
+            time_off,
+            holidays,
+            constraints,
         )
         result = run_solver(solver_input)
 

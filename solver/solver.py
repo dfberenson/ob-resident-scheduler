@@ -70,6 +70,24 @@ class ScheduleInput:
     requests: list[Request]
     time_off: list[TimeOff]
     holidays: list[date] = None
+    constraints: dict | None = None
+
+
+DEFAULT_CONSTRAINTS = {
+    "coverage": {
+        "weekday": {"ob_oc": 2, "ob_l3": 1, "ob_l4": 0, "ob_day_min": 2, "ob_day_max": 4},
+        "friday": {"ob_oc": 2, "ob_l3": 0, "ob_l4": 1, "ob_day_min": 2, "ob_day_max": 4},
+        "weekend_or_holiday": {"ob_oc": 2, "ob_l3": 0, "ob_l4": 1, "ob_day_min": 0, "ob_day_max": 0},
+    },
+    "tier0_call_prohibition": {"days": [1, 2, 3]},
+    "call_targets": {
+        "tier0": [6, 7],
+        "tier1": [6, 7],
+        "tier2": [5, 6],
+        "tier3": None,
+    },
+    "weights": {"understaff": 1000, "call": 20, "weekend": 5, "request": 10},
+}
 
 
 SHIFT_TYPES = [
@@ -96,16 +114,27 @@ def _is_friday(day: date) -> bool:
     return day.weekday() == 4
 
 
-def _coverage_requirements(day: date, holidays: set[date]) -> dict[str, int]:
+def _coverage_requirements(day: date, holidays: set[date], constraints: dict) -> dict[str, int]:
+    coverage = constraints.get("coverage", {})
     if _is_weekend(day) or day in holidays:
-        return {"ob_oc": 2, "ob_l4": 1, "ob_l3": 0, "ob_day_min": 0, "ob_day_max": 0}
+        return coverage.get(
+            "weekend_or_holiday",
+            {"ob_oc": 2, "ob_l4": 1, "ob_l3": 0, "ob_day_min": 0, "ob_day_max": 0},
+        )
     if _is_friday(day):
-        return {"ob_oc": 2, "ob_l4": 1, "ob_l3": 0, "ob_day_min": 2, "ob_day_max": 4}
-    return {"ob_oc": 2, "ob_l4": 0, "ob_l3": 1, "ob_day_min": 2, "ob_day_max": 4}
+        return coverage.get(
+            "friday",
+            {"ob_oc": 2, "ob_l4": 1, "ob_l3": 0, "ob_day_min": 2, "ob_day_max": 4},
+        )
+    return coverage.get(
+        "weekday",
+        {"ob_oc": 2, "ob_l4": 0, "ob_l3": 1, "ob_day_min": 2, "ob_day_max": 4},
+    )
 
 
-def _is_tier0_restricted(day: date, resident: Resident) -> bool:
-    return resident.ob_months_completed == 0 and day.day <= 3
+def _is_tier0_restricted(day: date, resident: Resident, constraints: dict) -> bool:
+    restricted_days = set((constraints.get("tier0_call_prohibition") or {}).get("days", [1, 2, 3]))
+    return resident.ob_months_completed == 0 and day.day in restricted_days
 
 
 def _is_time_off(day: date, resident_id: int, time_off: list[TimeOff]) -> ShiftType | None:
@@ -131,6 +160,7 @@ def generate_schedule(payload: ScheduleInput) -> GenerationOutput:
 
     days = list(_daterange(payload.start_date, payload.end_date))
     holiday_set = set(payload.holidays or [])
+    constraints = payload.constraints or DEFAULT_CONSTRAINTS
     resident_ids = [resident.id for resident in residents]
 
     assign: dict[tuple[int, date, ShiftType], cp_model.IntVar] = {}
@@ -164,7 +194,7 @@ def generate_schedule(payload: ScheduleInput) -> GenerationOutput:
 
             time_off_type = _is_time_off(day, resident.id, payload.time_off)
             if time_off_type:
-                if _is_tier0_restricted(day, resident):
+                if _is_tier0_restricted(day, resident, constraints):
                     alerts.append(
                         {
                             "date": day,
@@ -177,7 +207,7 @@ def generate_schedule(payload: ScheduleInput) -> GenerationOutput:
                     model.Add(sum(day_vars) == 0)
                     assignments.append(Assignment(resident_id=resident.id, date=day, shift_type=time_off_type))
 
-            if _is_tier0_restricted(day, resident):
+            if _is_tier0_restricted(day, resident, constraints):
                 model.Add(assign[(resident.id, day, ShiftType.OB_L3)] == 0)
                 model.Add(assign[(resident.id, day, ShiftType.OB_OC)] == 0)
                 model.Add(assign[(resident.id, day, ShiftType.OB_L4)] == 0)
@@ -186,7 +216,7 @@ def generate_schedule(payload: ScheduleInput) -> GenerationOutput:
     # Coverage requirements with understaffing slack
     understaff_slack: list[cp_model.IntVar] = []
     for day in days:
-        requirements = _coverage_requirements(day, holiday_set)
+        requirements = _coverage_requirements(day, holiday_set, constraints)
 
         ob_oc_vars = [assign[(resident_id, day, ShiftType.OB_OC)] for resident_id in resident_ids]
         ob_l3_vars = [assign[(resident_id, day, ShiftType.OB_L3)] for resident_id in resident_ids]
@@ -238,12 +268,12 @@ def generate_schedule(payload: ScheduleInput) -> GenerationOutput:
         call_count = model.NewIntVar(0, len(days), f"call_count_{resident.id}")
         model.Add(call_count == sum(call_vars))
 
-        if resident.tier in {0, 1}:
-            low, high = 6, 7
-        elif resident.tier == 2:
-            low, high = 5, 6
-        else:
+        call_targets = constraints.get("call_targets", {})
+        tier_key = f"tier{resident.tier}"
+        target = call_targets.get(tier_key)
+        if not target:
             continue
+        low, high = target
 
         under = model.NewIntVar(0, len(days), f"call_under_{resident.id}")
         over = model.NewIntVar(0, len(days), f"call_over_{resident.id}")
@@ -304,10 +334,11 @@ def generate_schedule(payload: ScheduleInput) -> GenerationOutput:
         penalty_terms.append(penalty)
 
     # Objective weights
-    slack_weight = 1000
-    call_weight = 20
-    weekend_weight = 5
-    request_weight = 10
+    weights = constraints.get("weights", {})
+    slack_weight = int(weights.get("understaff", 1000))
+    call_weight = int(weights.get("call", 20))
+    weekend_weight = int(weights.get("weekend", 5))
+    request_weight = int(weights.get("request", 10))
 
     objective_terms = []
     for slack in understaff_slack:
@@ -344,7 +375,7 @@ def generate_schedule(payload: ScheduleInput) -> GenerationOutput:
         fairness["weekend_ob_oc_spread"] = solver.Value(weekend_spread)
 
     for day in days:
-        requirements = _coverage_requirements(day, holiday_set)
+        requirements = _coverage_requirements(day, holiday_set, constraints)
         coverage = {
             "ob_oc": 0,
             "ob_l3": 0,

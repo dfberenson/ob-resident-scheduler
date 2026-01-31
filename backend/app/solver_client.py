@@ -32,6 +32,7 @@ def build_schedule_input(
     requests: Iterable[models.ResidentRequest],
     time_off: Iterable[models.TimeOff],
     holidays: Iterable[models.Holiday],
+    constraints: dict | None = None,
 ) -> ScheduleInput:
     resident_payload = [
         Resident(id=resident.id, tier=resident.tier, ob_months_completed=resident.ob_months_completed)
@@ -62,7 +63,8 @@ def build_schedule_input(
         residents=resident_payload,
         requests=request_payload,
         time_off=time_off_payload,
-        holidays=[holiday.date for holiday in holidays],
+        holidays=[holiday.date for holiday in holidays if holiday.hospital_holiday],
+        constraints=constraints,
     )
 
 
