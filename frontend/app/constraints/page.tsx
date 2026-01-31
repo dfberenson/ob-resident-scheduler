@@ -176,7 +176,7 @@ export default function ConstraintsPage() {
               <li>At most one OB shift per resident per day.</li>
               <li>OB_L3 requires OB_OC for the same resident on the next day.</li>
               <li>OB_OC or OB_L4 requires OB_POSTCALL the following day.</li>
-              <li>Time off blocks (BT_V / BT_O) prevent OB assignments during those dates.</li>
+              <li>Time off blocks (BT-Day) prevent OB assignments during those dates.</li>
               <li>Tier 0 residents (0 OB months) cannot take OB_L3, OB_OC, OB_L4, or OB_POSTCALL on the configured days.</li>
             </ul>
           </div>

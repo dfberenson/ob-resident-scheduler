@@ -14,8 +14,7 @@ class ShiftType(str, Enum):
     OB_OC = "OB_OC"
     OB_L4 = "OB_L4"
     OB_POSTCALL = "OB_POSTCALL"
-    BT_V = "BT_V"
-    BT_O = "BT_O"
+    BT_DAY = "BT_DAY"
 
 
 class VersionStatus(str, Enum):
@@ -151,6 +150,7 @@ class ResidentRequest(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     approved: Mapped[bool] = mapped_column(default=True, nullable=False)
+    pre_approved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     resident: Mapped[Resident] = relationship("Resident", back_populates="requests")
 
@@ -163,5 +163,7 @@ class TimeOff(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     block_type: Mapped[ShiftType] = mapped_column(SAEnum(ShiftType), nullable=False)
+    approved: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    pre_approved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     resident: Mapped[Resident] = relationship("Resident", back_populates="time_off_blocks")

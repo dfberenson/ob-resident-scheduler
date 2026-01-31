@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { formatDateWithDay } from "../utils/date";
+import { formatDateWithDay } from "../utils/date";
 
 interface TimeOffBlock {
   id: number;
@@ -9,6 +11,8 @@ interface TimeOffBlock {
   start_date: string;
   end_date: string;
   block_type: string;
+  approved: boolean;
+  pre_approved: boolean;
 }
 
 interface Resident {
@@ -24,7 +28,6 @@ export default function TimeOffPage() {
   const [residentId, setResidentId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [blockType, setBlockType] = useState("BT_V");
   const [status, setStatus] = useState("");
 
   const loadBlocks = async () => {
@@ -56,7 +59,9 @@ export default function TimeOffPage() {
         resident_id: Number(residentId),
         start_date: startDate,
         end_date: endDate,
-        block_type: blockType,
+        block_type: "BT_DAY",
+        approved: false,
+        pre_approved: false,
       }),
     });
     if (!response.ok) {
@@ -78,6 +83,20 @@ export default function TimeOffPage() {
       return;
     }
     setStatus("Time off block deleted.");
+    await loadBlocks();
+  };
+
+  const toggleApproval = async (block: TimeOffBlock) => {
+    setStatus("");
+    const response = await fetch(`${API_BASE_URL}/time-off/${block.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ approved: !block.approved }),
+    });
+    if (!response.ok) {
+      setStatus("Failed to update approval.");
+      return;
+    }
     await loadBlocks();
   };
 
@@ -109,13 +128,7 @@ export default function TimeOffPage() {
           End Date
           <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} required />
         </label>
-        <label>
-          Block Type
-          <select value={blockType} onChange={(event) => setBlockType(event.target.value)}>
-            <option value="BT_V">BT_V</option>
-            <option value="BT_O">BT_O</option>
-          </select>
-        </label>
+        <p style={{ margin: 0 }}>Block Type: BT-Day</p>
         <button type="submit">Add Time Off</button>
       </form>
       {status ? <p>{status}</p> : null}
@@ -131,6 +144,7 @@ export default function TimeOffPage() {
                 <th style={{ textAlign: "left" }}>Start</th>
                 <th style={{ textAlign: "left" }}>End</th>
                 <th style={{ textAlign: "left" }}>Type</th>
+                <th style={{ textAlign: "left" }}>Status</th>
                 <th style={{ textAlign: "left" }}>Actions</th>
               </tr>
             </thead>
@@ -138,10 +152,25 @@ export default function TimeOffPage() {
               {blocks.map((block) => (
                 <tr key={block.id}>
                   <td>{residentLookup.get(block.resident_id) ?? block.resident_id}</td>
-                  <td>{block.start_date}</td>
-                  <td>{block.end_date}</td>
-                  <td>{block.block_type}</td>
+                  <td>{formatDateWithDay(block.start_date)}</td>
+                  <td>{formatDateWithDay(block.end_date)}</td>
+                  <td>{block.block_type === "BT_DAY" ? "BT-Day" : block.block_type}</td>
                   <td>
+                    {block.pre_approved
+                      ? "Pre-Approved"
+                      : block.approved
+                      ? "Approved"
+                      : "Not approved"}
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      onClick={() => toggleApproval(block)}
+                      disabled={block.pre_approved}
+                      title={block.pre_approved ? "Pre-approved time off cannot be edited." : ""}
+                    >
+                      {block.approved ? "Unapprove" : "Approve"}
+                    </button>{" "}
                     <button type="button" onClick={() => deleteBlock(block.id)}>
                       Delete
                     </button>

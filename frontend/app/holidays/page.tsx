@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { formatDateWithDay } from "../utils/date";
 
 interface Holiday {
   id: number;
@@ -66,10 +67,13 @@ export default function HolidaysPage() {
     seedHolidays();
   }, [periodId]);
 
-  const allConfirmed =
-    holidays.length > 0 && holidays.every((holiday) => holiday.hospital_holiday !== null);
+  const allConfirmed = holidays.every((holiday) => holiday.hospital_holiday !== null);
 
   const proceed = () => {
+    if (periodId) {
+      router.push(`/requests?period_id=${periodId}`);
+      return;
+    }
     router.push("/requests");
   };
 
@@ -167,7 +171,7 @@ export default function HolidaysPage() {
             <tbody>
               {holidays.map((holiday) => (
                 <tr key={holiday.id}>
-                  <td>{holiday.date}</td>
+                  <td>{formatDateWithDay(holiday.date)}</td>
                   <td>{holiday.name}</td>
                   <td>
                     <select

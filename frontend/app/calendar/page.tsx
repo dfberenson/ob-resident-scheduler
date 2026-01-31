@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import WorkflowNav from "../components/WorkflowNav";
+import { formatDateWithDay } from "../utils/date";
 
 interface Assignment {
   id: number;
@@ -38,6 +40,8 @@ interface ScheduleVersion {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 
 export default function CalendarPage() {
+  const searchParams = useSearchParams();
+  const periodIdParam = searchParams.get("period_id");
   const [periods, setPeriods] = useState<SchedulePeriod[]>([]);
   const [versions, setVersions] = useState<ScheduleVersion[]>([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
@@ -73,11 +77,13 @@ export default function CalendarPage() {
         return;
       }
       setPeriods(periodList);
-      setSelectedPeriodId(periodList[0].id);
+      const desiredId = periodIdParam ? Number(periodIdParam) : null;
+      const matched = desiredId ? periodList.find((period) => period.id === desiredId) : null;
+      setSelectedPeriodId(matched ? matched.id : periodList[0].id);
     };
 
     load();
-  }, []);
+  }, [periodIdParam]);
 
   useEffect(() => {
     if (!selectedPeriodId) {
@@ -248,6 +254,7 @@ export default function CalendarPage() {
 
   const residentLookup = new Map(residents.map((resident) => [resident.id, resident.name]));
   const getResidentName = (residentId: number) => residentLookup.get(residentId) ?? `${residentId}`;
+  const selectedVersion = versions.find((version) => version.id === selectedVersionId) ?? null;
   const assignmentsByDate = assignments.reduce<Record<string, Assignment[]>>((acc, assignment) => {
     if (!acc[assignment.date]) {
       acc[assignment.date] = [];
@@ -321,11 +328,12 @@ export default function CalendarPage() {
             value={selectedPeriodId ?? ""}
             onChange={(event) => setSelectedPeriodId(Number(event.target.value))}
           >
-            {periods.map((period) => (
-              <option key={period.id} value={period.id}>
-                {period.name ?? `Period ${period.id}`} ({period.start_date} → {period.end_date})
-              </option>
-            ))}
+                {periods.map((period) => (
+                  <option key={period.id} value={period.id}>
+                {period.name ?? `Period ${period.id}`} ({formatDateWithDay(period.start_date)} →{" "}
+                {formatDateWithDay(period.end_date)})
+                  </option>
+                ))}
           </select>
         </label>
         <label>
@@ -336,7 +344,7 @@ export default function CalendarPage() {
           >
             {versions.map((version) => (
               <option key={version.id} value={version.id}>
-                {version.id} • {version.status} • {new Date(version.created_at).toLocaleString()}
+                {version.id} • {version.status} • {formatDateWithDay(version.created_at)}
               </option>
             ))}
           </select>
@@ -370,6 +378,16 @@ export default function CalendarPage() {
           <button type="button" onClick={publishVersion} disabled={!selectedVersionId}>
             Publish Selected Version
           </button>
+          <Link
+            href={
+              selectedPeriodId
+                ? `/print?period_id=${selectedPeriodId}${selectedVersionId ? `&version_id=${selectedVersionId}` : ""}`
+                : "/print"
+            }
+            style={{ alignSelf: "center" }}
+          >
+            Print published schedule →
+          </Link>
         </div>
         {jobId ? (
           <div>
@@ -399,7 +417,7 @@ export default function CalendarPage() {
                 }}
               >
                 <header style={{ display: "flex", justifyContent: "space-between" }}>
-                  <h2 style={{ margin: 0 }}>{date}</h2>
+                  <h2 style={{ margin: 0 }}>{formatDateWithDay(date)}</h2>
                   {hasAlerts ? (
                     <span style={{ color: "#b42318", fontWeight: 600 }}>
                       {dayAlerts.length} Alert{dayAlerts.length > 1 ? "s" : ""}
@@ -476,7 +494,7 @@ export default function CalendarPage() {
                     <tbody>
                       {items.map((assignment) => (
                         <tr key={assignment.id}>
-                          <td>{assignment.date}</td>
+                          <td>{formatDateWithDay(assignment.date)}</td>
                           <td>{assignment.shift_type}</td>
                           <td>
                             <button type="button" onClick={() => startEditing(assignment)}>
@@ -524,7 +542,7 @@ export default function CalendarPage() {
                     <tbody>
                       {items.map((assignment) => (
                         <tr key={assignment.id}>
-                          <td>{assignment.date}</td>
+                          <td>{formatDateWithDay(assignment.date)}</td>
                           <td>{getResidentName(assignment.resident_id)}</td>
                           <td>
                             <button type="button" onClick={() => startEditing(assignment)}>

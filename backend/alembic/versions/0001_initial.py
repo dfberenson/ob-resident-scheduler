@@ -20,8 +20,7 @@ shift_type_enum = sa.Enum(
     "OB_OC",
     "OB_L4",
     "OB_POSTCALL",
-    "BT_V",
-    "BT_O",
+    "BT_DAY",
     name="shifttype",
 )
 

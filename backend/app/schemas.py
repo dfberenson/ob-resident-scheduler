@@ -11,8 +11,7 @@ class ShiftType(str, Enum):
     OB_OC = "OB_OC"
     OB_L4 = "OB_L4"
     OB_POSTCALL = "OB_POSTCALL"
-    BT_V = "BT_V"
-    BT_O = "BT_O"
+    BT_DAY = "BT_DAY"
 
 
 class VersionStatus(str, Enum):
@@ -97,6 +96,7 @@ class ResidentRequestRead(BaseModel):
     start_date: date
     end_date: date
     approved: bool
+    pre_approved: bool
     resident_name: str
 
     class Config:
@@ -119,6 +119,8 @@ class TimeOffCreate(BaseModel):
     start_date: date
     end_date: date
     block_type: ShiftType
+    approved: bool = True
+    pre_approved: bool = False
 
 
 class TimeOffRead(TimeOffCreate):
@@ -133,6 +135,8 @@ class TimeOffUpdate(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     block_type: Optional[ShiftType] = None
+    approved: Optional[bool] = None
+    pre_approved: Optional[bool] = None
 
 
 class HolidayCreate(BaseModel):

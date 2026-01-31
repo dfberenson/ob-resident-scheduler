@@ -6,8 +6,11 @@ Monorepo for the OB anesthesia rotation scheduling app.
 
 ```bash
 cd /workspace/ob-resident-scheduler
-docker compose up --build
+docker compose up --build -d
 ```
+
+- After any code change, rebuild with `docker compose up --build -d` to pick up updates.
+- Use `docker compose logs -f` to follow service output after starting in detached mode.
 
 - Demo data is auto-seeded on startup when using Docker Compose.
 
@@ -68,7 +71,7 @@ curl -X PATCH http://localhost:8000/requests/1 \
 ```bash
 curl -X POST http://localhost:8000/time-off \
   -H "Content-Type: application/json" \
-  -d '{"resident_id": 1, "start_date": "2024-01-15", "end_date": "2024-01-19", "block_type": "BT_V"}'
+  -d '{"resident_id": 1, "start_date": "2024-01-15", "end_date": "2024-01-19", "block_type": "BT_DAY"}'
 ```
 
 ```bash

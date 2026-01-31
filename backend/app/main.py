@@ -1,7 +1,9 @@
 import os
+import csv
+import io
 from datetime import date, datetime, timedelta
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Body, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from celery.result import AsyncResult
 from sqlalchemy import func, text
@@ -133,6 +135,7 @@ def list_requests(db: Session = Depends(get_db)):
             start_date=request.start_date,
             end_date=request.end_date,
             approved=request.approved,
+            pre_approved=request.pre_approved,
             resident_name=resident.name,
         )
         for request, resident in requests
@@ -155,6 +158,7 @@ def update_request(request_id: int, payload: schemas.RequestApprovalUpdate, db: 
         start_date=request.start_date,
         end_date=request.end_date,
         approved=request.approved,
+        pre_approved=request.pre_approved,
         resident_name=resident.name if resident else "",
     )
 
@@ -171,6 +175,8 @@ def create_time_off(payload: schemas.TimeOffCreate, db: Session = Depends(get_db
         start_date=payload.start_date,
         end_date=payload.end_date,
         block_type=payload.block_type,
+        approved=payload.approved,
+        pre_approved=payload.pre_approved,
     )
     db.add(block)
     db.commit()
@@ -191,6 +197,10 @@ def update_time_off(block_id: int, payload: schemas.TimeOffUpdate, db: Session =
         block.end_date = payload.end_date
     if payload.block_type is not None:
         block.block_type = payload.block_type
+    if payload.approved is not None:
+        block.approved = payload.approved
+    if payload.pre_approved is not None:
+        block.pre_approved = payload.pre_approved
     db.commit()
     db.refresh(block)
     return block
@@ -369,7 +379,8 @@ def import_requests(payload: schemas.RequestImportPayload, db: Session = Depends
                         request_type=request_type,
                         start_date=window.start_date,
                         end_date=window.end_date,
-                        approved=True,
+                        approved=False,
+                        pre_approved=False,
                     )
                 )
                 imported += 1
@@ -380,6 +391,214 @@ def import_requests(payload: schemas.RequestImportPayload, db: Session = Depends
 
     db.commit()
     return {"status": "ok", "imported": imported}
+
+
+@app.post("/requests/import-csv")
+def import_requests_csv(payload: str = Body(..., media_type="text/plain"), db: Session = Depends(get_db)):
+    def parse_month(value: str) -> int | None:
+        value = (value or "").strip()
+        if not value:
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            pass
+        lookup = {
+            "january": 1,
+            "february": 2,
+            "march": 3,
+            "april": 4,
+            "may": 5,
+            "june": 6,
+            "july": 7,
+            "august": 8,
+            "september": 9,
+            "october": 10,
+            "november": 11,
+            "december": 12,
+        }
+        return lookup.get(value.lower())
+
+    def parse_date_value(value: str) -> date | None:
+        value = (value or "").strip()
+        if not value:
+            return None
+        for fmt in ("%m/%d/%Y", "%m/%d/%y"):
+            try:
+                return datetime.strptime(value, fmt).date()
+            except ValueError:
+                continue
+        return None
+
+    def parse_datetime_value(value: str) -> datetime | None:
+        value = (value or "").strip()
+        if not value:
+            return None
+        for fmt in ("%m/%d/%Y %H:%M", "%m/%d/%y %H:%M"):
+            try:
+                return datetime.strptime(value, fmt)
+            except ValueError:
+                continue
+        return None
+
+    def normalize_type(value: str) -> str | None:
+        value = (value or "").strip().lower()
+        if not value:
+            return None
+        if value in {"request call", "request-call"}:
+            return "REQUEST_CALL"
+        if value in {"no call", "no-call"}:
+            return "NO_CALL"
+        if value in {"weekday off", "day off", "bt-day", "bt day"}:
+            return "BT_DAY"
+        return None
+
+    def parse_tier(value: str) -> int:
+        value = (value or "").strip().lower()
+        for prefix in ("ca-", "ca ", "r", "pg"):
+            if value.startswith(prefix):
+                value = value[len(prefix) :]
+                break
+        digits = "".join(char for char in value if char.isdigit())
+        return int(digits) if digits else 0
+
+    def parse_int(value: str) -> int:
+        value = (value or "").strip()
+        try:
+            return int(value)
+        except ValueError:
+            return 0
+
+    sample = payload[:4096]
+    sniffer = csv.Sniffer()
+    try:
+        dialect = sniffer.sniff(sample)
+    except csv.Error:
+        dialect = csv.excel
+        dialect.delimiter = "\t" if "\t" in sample else ","
+
+    reader = csv.DictReader(io.StringIO(payload), dialect=dialect)
+    rows = list(reader)
+    if not rows:
+        raise HTTPException(status_code=400, detail="No rows found in CSV.")
+
+    latest_rows: dict[tuple[str, int | None, int | None], dict] = {}
+    for row in rows:
+        name = (row.get("Full Name") or row.get("Name") or "").strip()
+        if not name:
+            continue
+        month_value = parse_month(row.get("What month is your OB Anesthesia rotation?") or "")
+        year_value = parse_int(row.get("What year is your OB Anesthesia rotation?") or "")
+        last_modified = parse_datetime_value(row.get("Last modified time") or "")
+        key = (name.lower(), month_value, year_value)
+        existing = latest_rows.get(key)
+        if existing is None:
+            latest_rows[key] = {"row": row, "last_modified": last_modified}
+            continue
+        if last_modified and (existing["last_modified"] is None or last_modified > existing["last_modified"]):
+            latest_rows[key] = {"row": row, "last_modified": last_modified}
+
+    db.query(models.AssignmentHistory).delete()
+    db.query(models.ScheduleAlert).delete()
+    db.query(models.Assignment).delete()
+    db.query(models.ResidentRequest).delete()
+    db.query(models.TimeOff).delete()
+    db.query(models.Resident).delete()
+    db.commit()
+
+    imported_requests = 0
+    imported_time_off = 0
+    skipped = 0
+
+    for entry in latest_rows.values():
+        row = entry["row"]
+        name = (row.get("Full Name") or row.get("Name") or "").strip()
+        if not name:
+            skipped += 1
+            continue
+
+        resident = db.query(models.Resident).filter(models.Resident.name == name).first()
+        if not resident:
+            resident = models.Resident(
+                name=name,
+                tier=parse_tier(row.get("Year of Residency") or ""),
+                ob_months_completed=parse_int(
+                    row.get("How many prior months of OB Anesthesia have you done?") or ""
+                ),
+            )
+            db.add(resident)
+            db.flush()
+
+        def add_window(
+            start_key: str,
+            end_key: str,
+            type_key: str,
+            pre_approved: bool,
+        ):
+            nonlocal imported_requests, imported_time_off
+            start = parse_date_value(row.get(start_key) or "")
+            end = parse_date_value(row.get(end_key) or "") or start
+            request_type_raw = row.get(type_key) or ""
+            normalized = normalize_type(request_type_raw)
+            if not start or not end or not normalized:
+                return
+            if normalized == "BT_DAY":
+                db.add(
+                    models.TimeOff(
+                        resident_id=resident.id,
+                        start_date=start,
+                        end_date=end,
+                        block_type=models.ShiftType.BT_DAY,
+                        approved=pre_approved,
+                        pre_approved=pre_approved,
+                    )
+                )
+                imported_time_off += 1
+                return
+            request_type = (
+                models.RequestType.PREFER_CALL
+                if normalized == "REQUEST_CALL"
+                else models.RequestType.AVOID_CALL
+            )
+            db.add(
+                models.ResidentRequest(
+                    resident_id=resident.id,
+                    request_type=request_type,
+                    start_date=start,
+                    end_date=end,
+                    approved=pre_approved,
+                    pre_approved=pre_approved,
+                )
+            )
+            imported_requests += 1
+
+        add_window(
+            "Pre-Approved Schedule Request Dates",
+            "Pre-Approved Schedule Request Dates2",
+            "Type of Pre-Approved Schedule Request",
+            True,
+        )
+        add_window(
+            "Top Priority Schedule Request Dates",
+            "Top Priority Schedule Request Dates2",
+            "Type of Top Priority Schedule Request",
+            False,
+        )
+        add_window(
+            "Second Priority Schedule Request Dates",
+            "Second Priority Schedule Request Dates2",
+            "Type of Second Priority Schedule Request",
+            False,
+        )
+
+    db.commit()
+    return {
+        "status": "ok",
+        "imported_requests": imported_requests,
+        "imported_time_off": imported_time_off,
+        "rows_processed": len(latest_rows),
+        "rows_skipped": skipped,
+    }
 
 
 @app.post("/periods", response_model=schemas.SchedulePeriodRead, status_code=201)
@@ -852,7 +1071,9 @@ def seed_demo_data_for_startup(db: Session) -> dict:
         resident_id=residents[2].id,
         start_date=date(2024, 1, 5),
         end_date=date(2024, 1, 7),
-        block_type=models.ShiftType.BT_V,
+        block_type=models.ShiftType.BT_DAY,
+        approved=True,
+        pre_approved=True,
     )
     db.add_all([assignment, request, time_off])
     db.commit()

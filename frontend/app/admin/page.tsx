@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { formatDateWithDay } from "../utils/date";
 
 interface ResidentRequest {
   id: number;
@@ -173,8 +174,8 @@ export default function AdminDashboard() {
                 <tr key={request.id}>
                   <td>{request.resident_name}</td>
                   <td>{request.request_type}</td>
-                  <td>{request.start_date}</td>
-                  <td>{request.end_date}</td>
+                  <td>{formatDateWithDay(request.start_date)}</td>
+                  <td>{formatDateWithDay(request.end_date)}</td>
                 </tr>
               ))}
             </tbody>
@@ -206,7 +207,7 @@ export default function AdminDashboard() {
                   <tr key={assignment.id} style={{ background: hasConflict ? "#ffe6e6" : "transparent" }}>
                     <td>{assignment.id}</td>
                     <td>{residentLookup.get(assignment.resident_id) ?? assignment.resident_id}</td>
-                    <td>{assignment.date}</td>
+                    <td>{formatDateWithDay(assignment.date)}</td>
                     <td>{assignment.shift_type}</td>
                     <td>{hasConflict ? "Conflict" : ""}</td>
                   </tr>
@@ -283,12 +284,14 @@ export default function AdminDashboard() {
             <tbody>
               {history.map((entry) => (
                 <tr key={entry.id}>
-                  <td>{entry.changed_at}</td>
+                  <td>{formatDateWithDay(entry.changed_at)}</td>
                   <td>
-                    {entry.old_resident_id} | {entry.old_date} | {entry.old_shift_type}
+                    {entry.old_resident_id} | {formatDateWithDay(entry.old_date)} |{" "}
+                    {entry.old_shift_type}
                   </td>
                   <td>
-                    {entry.new_resident_id} | {entry.new_date} | {entry.new_shift_type}
+                    {entry.new_resident_id} | {formatDateWithDay(entry.new_date)} |{" "}
+                    {entry.new_shift_type}
                   </td>
                 </tr>
               ))}

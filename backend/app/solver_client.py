@@ -13,8 +13,7 @@ SHIFT_MAP = {
     models.ShiftType.OB_OC: SolverShiftType.OB_OC,
     models.ShiftType.OB_L4: SolverShiftType.OB_L4,
     models.ShiftType.OB_POSTCALL: SolverShiftType.OB_POSTCALL,
-    models.ShiftType.BT_V: SolverShiftType.BT_V,
-    models.ShiftType.BT_O: SolverShiftType.BT_O,
+    models.ShiftType.BT_DAY: SolverShiftType.BT_DAY,
 }
 
 
@@ -56,6 +55,7 @@ def build_schedule_input(
             block_type=SHIFT_MAP[block.block_type],
         )
         for block in time_off
+        if block.approved
     ]
     return ScheduleInput(
         start_date=start_date,

@@ -47,6 +47,11 @@ export default function HomePage() {
           <Link href={workflowSteps[0].href}>Start workflow →</Link>
         </div>
       </section>
+      <section style={{ marginTop: "2rem" }}>
+        <h2>Published Schedule</h2>
+        <p>Print a published schedule in a clean, readable format.</p>
+        <Link href="/print">Print published schedule →</Link>
+      </section>
     </main>
   );
 }

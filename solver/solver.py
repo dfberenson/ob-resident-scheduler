@@ -14,8 +14,7 @@ class ShiftType(str, Enum):
     OB_OC = "OB_OC"
     OB_L4 = "OB_L4"
     OB_POSTCALL = "OB_POSTCALL"
-    BT_V = "BT_V"
-    BT_O = "BT_O"
+    BT_DAY = "BT_DAY"
 
 
 class RequestType(str, Enum):

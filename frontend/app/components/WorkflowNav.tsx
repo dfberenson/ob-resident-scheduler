@@ -1,17 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { workflowSteps } from "../workflow";
 
 export default function WorkflowNav() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const periodId = searchParams.get("period_id");
   const currentIndex = workflowSteps.findIndex((step) => step.href === pathname);
 
   if (currentIndex === -1) {
     return null;
   }
 
+  const withPeriodId = (href: string) => (periodId ? `${href}?period_id=${periodId}` : href);
   const current = workflowSteps[currentIndex];
   const previous = workflowSteps[currentIndex - 1];
   const next = workflowSteps[currentIndex + 1];
@@ -31,8 +34,8 @@ export default function WorkflowNav() {
       </p>
       <p style={{ margin: "0.25rem 0 0.75rem", color: "#475569" }}>{current.description}</p>
       <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-        {previous ? <Link href={previous.href}>← {previous.title}</Link> : null}
-        {next ? <Link href={next.href}>Next: {next.title} →</Link> : null}
+        {previous ? <Link href={withPeriodId(previous.href)}>← {previous.title}</Link> : null}
+        {next ? <Link href={withPeriodId(next.href)}>Next: {next.title} →</Link> : null}
       </div>
     </section>
   );

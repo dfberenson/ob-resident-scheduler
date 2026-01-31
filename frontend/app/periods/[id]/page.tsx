@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { formatDateWithDay } from "../../utils/date";
 
 interface PeriodDetailPageProps {
   params: { id: string };
@@ -103,7 +104,7 @@ export default function PeriodDetailPage({ params }: PeriodDetailPageProps) {
       <h1>Schedule Period {params.id}</h1>
       {period ? (
         <p>
-          {period.name} ({period.start_date} → {period.end_date})
+          {period.name} ({formatDateWithDay(period.start_date)} → {formatDateWithDay(period.end_date)})
         </p>
       ) : null}
       <section style={{ maxWidth: "520px" }}>
@@ -115,7 +116,7 @@ export default function PeriodDetailPage({ params }: PeriodDetailPageProps) {
           >
             {versions.map((version) => (
               <option key={version.id} value={version.id}>
-                {version.id} • {version.status} • {new Date(version.created_at).toLocaleString()}
+                {version.id} • {version.status} • {formatDateWithDay(version.created_at)}
               </option>
             ))}
           </select>
@@ -144,7 +145,7 @@ export default function PeriodDetailPage({ params }: PeriodDetailPageProps) {
                 <ul>
                   {validation.hard_violations.map((violation, index) => (
                     <li key={`${violation.message}-${index}`}>
-                      {violation.date ? `${violation.date}: ` : ""}
+                      {violation.date ? `${formatDateWithDay(violation.date)}: ` : ""}
                       {violation.message}
                       {violation.resident_id ? ` (Resident ${violation.resident_id})` : ""}
                     </li>
@@ -160,7 +161,7 @@ export default function PeriodDetailPage({ params }: PeriodDetailPageProps) {
                 <ul>
                   {validation.alerts.map((alert, index) => (
                     <li key={`${alert.date}-${index}`}>
-                      {alert.date}: {alert.message} ({alert.severity})
+                      {formatDateWithDay(alert.date)}: {alert.message} ({alert.severity})
                     </li>
                   ))}
                 </ul>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import WorkflowNav from "../components/WorkflowNav";
+import { formatDateWithDay } from "../utils/date";
 
 interface SchedulePeriod {
   id: number;
@@ -141,8 +142,8 @@ export default function PeriodsPage() {
               {periods.map((period) => (
                 <tr key={period.id}>
                   <td>{period.name}</td>
-                  <td>{period.start_date}</td>
-                  <td>{period.end_date}</td>
+                  <td>{formatDateWithDay(period.start_date)}</td>
+                  <td>{formatDateWithDay(period.end_date)}</td>
                   <td>
                     <Link href={`/holidays?period_id=${period.id}`}>Resume</Link>
                   </td>

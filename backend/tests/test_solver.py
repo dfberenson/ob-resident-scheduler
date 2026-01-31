@@ -81,7 +81,7 @@ def test_solver_respects_time_off_blocks():
                 resident_id=1,
                 start_date=date(2024, 1, 6),
                 end_date=date(2024, 1, 6),
-                block_type=ShiftType.BT_V,
+                block_type=ShiftType.BT_DAY,
             )
         ],
     )
@@ -89,7 +89,7 @@ def test_solver_respects_time_off_blocks():
     result = generate_schedule(payload)
 
     assert any(
-        assignment.resident_id == 1 and assignment.shift_type == ShiftType.BT_V
+        assignment.resident_id == 1 and assignment.shift_type == ShiftType.BT_DAY
         for assignment in result.assignments
     )
 
